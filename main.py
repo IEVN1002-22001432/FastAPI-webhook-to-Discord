@@ -17,24 +17,25 @@ async def webhook(request: Request):
         return {"status": "error", "details": "invalid json"}
 
     # Extract fields safely
-    work_id = data["resource"]["id"]
-    title = data["resource"]["fields"]["System.Title"]
-    user = data["resource"]["fields"]["System.ChangedBy"]["displayName"]
-    url = data["resource"]["_links"]["html"]["href"]
+    resource = body.get("resource", {})
+    fields = resource.get("fields", {})
+    title = fields.get("System.Title", "Sin título")
+    user = fields.get("System.ChangedBy", {}).get("displayName", "")
+    work_id = resource.get("id", "—")
 
-    message = f"""
-        🔔 Update en Azure Boards
-        **ID:** {work_id}
-        **Título:** {title}
-        **Usuario:** {user}
-        🔗 {url}
-        """
+    # Discord message format
+    discord_payload = {
+        "content": f"🔔 **Update en Azure Boards**\n"
+                   f"**ID:** {work_id}\n"
+                   f"**Título:** {title}\n"
+                   f"**Usuario:** {user}\n"
+    }
 
-    print("Sending to Discord:", message)
+    print("Sending to Discord:", discord_payload)
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.post(DISCORD_WEBHOOK, json=message, timeout=10)
+            response = await client.post(DISCORD_WEBHOOK, json=discord_payload, timeout=10)
             print("Discord response:", response.status_code, response.text)
 
             if response.status_code not in (200, 204):
