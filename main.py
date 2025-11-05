@@ -3,40 +3,48 @@ from fastapi import FastAPI, Request
 import httpx
 
 app = FastAPI()
+
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 print("DISCORD_WEBHOOK =", DISCORD_WEBHOOK)
 
 @app.post("/webhook")
-async def receibve_webhool(request: Request):
+async def webhook(request: Request):
     try:
         body = await request.json()
-    except Exception:
+        print("Received body:", body)
+    except Exception as e:
+        print("JSON parse error:", e)
         return {"status": "error", "details": "invalid json"}
 
+    # Extract fields safely
     resource = body.get("resource", {})
     fields = resource.get("fields", {})
-    title = fields.get("System.Title", "-")
-    changed_by = fields.get("System.ChangedBy", "-")
-    work_id = body.get("id", "-")
-    link = resource.get("_links", {}).get("html", {}).get("href", "-")
+    title = fields.get("System.Title", "Sin título")
+    user = fields.get("System.ChangedBy", "Desconocido")
+    work_id = resource.get("id", "—")
+    link = resource.get("_links", {}).get("html", {}).get("href", "")
 
-    message = {
-        "context": (
-            f"**Azure Boards Update**\n"
-            f"**Work item**: {work_id}\n"
-            f"**Título**: {title}\n"
-            f"**Usuario**: {changed_by}\n"
-            f"🔗 {link}"
-        )
+    # Discord message format
+    discord_payload = {
+        "content": f"🔔 **Update en Azure Boards**\n"
+                   f"**ID:** {work_id}\n"
+                   f"**Título:** {title}\n"
+                   f"**Usuario:** {user}\n"
+                   f"🔗 {link}"
     }
+
+    print("Sending to Discord:", discord_payload)
 
     try:
         async with httpx.AsyncClient() as client:
-            resp = await client.post(DISCORD_WEBHOOK, json=message, timeout=10)
-            
-            if resp.status_code == 429:
-                return {"status": "error", "details": "Discord rate limited"}
+            response = await client.post(DISCORD_WEBHOOK, json=discord_payload, timeout=10)
+            print("Discord response:", response.status_code, response.text)
+
+            if response.status_code not in (200, 204):
+                return {"status": "error", "discord": response.text}
+
     except Exception as e:
+        print("Discord error:", e)
         return {"status": "error", "details": str(e)}
-    
-    return {"status": "ok"}
+
+    return {"status": "ok", "sent": True}
