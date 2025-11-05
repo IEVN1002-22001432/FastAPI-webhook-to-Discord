@@ -18,7 +18,7 @@ async def update(request: Request):
 
     # Extract fields safely
     resource = body.get("resource", {})
-    fields = resource.get("fields", {})
+    fields = resource.get("revision", {}).get("fields", {})
     title = fields.get("System.Title", "Sin título")
     user = fields.get("System.ChangedBy", {}).get("displayName", "")
     work_id = resource.get("id", "—")
