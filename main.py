@@ -21,7 +21,7 @@ async def update(request: Request):
     fields = resource.get("revision", {}).get("fields", {})
     title = fields.get("System.Title", "Sin título")
     user = fields.get("System.ChangedBy", "Desconocido");
-    work_id = resource.get("id", "—")
+    work_id = resource.get("revision", {}).get("id", "-")
 
     # Discord message format
     discord_payload = {
