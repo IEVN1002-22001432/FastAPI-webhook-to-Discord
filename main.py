@@ -4,6 +4,7 @@ import httpx
 
 app = FastAPI()
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
+print("DISCORD_WEBHOOK =", DISCORD_WEBHOOK)
 
 @app.post("/webhook")
 async def receibve_webhool(request: Request):
