@@ -20,7 +20,7 @@ async def update(request: Request):
     resource = body.get("resource", {})
     fields = resource.get("revision", {}).get("fields", {})
     title = fields.get("System.Title", "Sin título")
-    user = fields.get("System.ChangedBy", {}).get("displayName", "")
+    user = fields.get("System.ChangedBy", "Desconocido");
     work_id = resource.get("id", "—")
 
     # Discord message format
@@ -60,7 +60,7 @@ async def create(request: Request):
     resource = body.get("resource", {})
     fields = resource.get("fields", {})
     title = fields.get("System.Title", "Sin título")
-    user = fields.get("System.ChangedBy", {}).get("displayName", "")
+    user = fields.get("System.ChangedBy", "Desconocido");
     work_id = resource.get("id", "—")
 
     # Discord message format
@@ -100,7 +100,7 @@ async def delete(request: Request):
     resource = body.get("resource", {})
     fields = resource.get("fields", {})
     title = fields.get("System.Title", "Sin título")
-    user = fields.get("System.ChangedBy", {}).get("displayName", "")
+    user = fields.get("System.ChangedBy", "Desconocido");
     work_id = resource.get("id", "—")
 
     # Discord message format
