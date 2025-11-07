@@ -1,19 +1,19 @@
 import os
 import re
+import json
 from fastapi import FastAPI, Request
 import httpx
+from urllib.parse import unquote
 
 app = FastAPI()
 
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
-print("DISCORD_WEBHOOK =", DISCORD_WEBHOOK)
 DISCORD_WEBHOOK2 = os.getenv("DISCORD_WEBHOOK2")
 AZURE_ORG = os.getenv("AZURE_ORG")
-print("AZURE_ORG =", AZURE_ORG)
 AZURE_PROJECT = os.getenv("AZURE_PROJECT")
-print("AZURE_PROJECT =", AZURE_PROJECT)
 AZURE_PAT = os.getenv("AZURE_PAT")
-print("AZURE_PAT =", AZURE_PAT)
+
+# ---------------- Azure Boards ---------------- #
 
 @app.post("/update")
 async def update(request: Request):
@@ -24,14 +24,12 @@ async def update(request: Request):
         print("JSON parse error:", e)
         return {"status": "error", "details": "invalid json"}
 
-    # Extract fields safely
     resource = body.get("resource", {})
     fields = resource.get("revision", {}).get("fields", {})
     title = fields.get("System.Title", "Sin título")
-    user = fields.get("System.ChangedBy", "Desconocido");
+    user = fields.get("System.ChangedBy", "Desconocido")
     work_id = resource.get("revision", {}).get("id", "-")
 
-    # Discord message format
     discord_payload = {
         "content": f"🔔 **Actualización en Azure Boards**\n"
                    f"**ID:** {work_id}\n"
@@ -39,21 +37,11 @@ async def update(request: Request):
                    f"**Usuario:** {user}\n"
     }
 
-    print("Sending to Discord:", discord_payload)
+    async with httpx.AsyncClient() as client:
+        response = await client.post(DISCORD_WEBHOOK, json=discord_payload, timeout=10)
+        print("Discord response:", response.status_code)
+    return {"status": "ok"}
 
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(DISCORD_WEBHOOK, json=discord_payload, timeout=10)
-            print("Discord response:", response.status_code, response.text)
-
-            if response.status_code not in (200, 204):
-                return {"status": "error", "discord": response.text}
-
-    except Exception as e:
-        print("Discord error:", e)
-        return {"status": "error", "details": str(e)}
-
-    return {"status": "ok", "sent": True}
 
 @app.post("/create")
 async def create(request: Request):
@@ -64,14 +52,12 @@ async def create(request: Request):
         print("JSON parse error:", e)
         return {"status": "error", "details": "invalid json"}
 
-    # Extract fields safely
     resource = body.get("resource", {})
     fields = resource.get("fields", {})
     title = fields.get("System.Title", "Sin título")
-    user = fields.get("System.ChangedBy", "Desconocido");
+    user = fields.get("System.ChangedBy", "Desconocido")
     work_id = resource.get("id", "—")
 
-    # Discord message format
     discord_payload = {
         "content": f"🔔 **Nuevo trabajo en Azure Boards**\n"
                    f"**ID:** {work_id}\n"
@@ -79,21 +65,11 @@ async def create(request: Request):
                    f"**Usuario:** {user}\n"
     }
 
-    print("Sending to Discord:", discord_payload)
+    async with httpx.AsyncClient() as client:
+        response = await client.post(DISCORD_WEBHOOK, json=discord_payload, timeout=10)
+        print("Discord response:", response.status_code)
+    return {"status": "ok"}
 
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(DISCORD_WEBHOOK, json=discord_payload, timeout=10)
-            print("Discord response:", response.status_code, response.text)
-
-            if response.status_code not in (200, 204):
-                return {"status": "error", "discord": response.text}
-
-    except Exception as e:
-        print("Discord error:", e)
-        return {"status": "error", "details": str(e)}
-
-    return {"status": "ok", "sent": True}
 
 @app.post("/delete")
 async def delete(request: Request):
@@ -104,14 +80,12 @@ async def delete(request: Request):
         print("JSON parse error:", e)
         return {"status": "error", "details": "invalid json"}
 
-    # Extract fields safely
     resource = body.get("resource", {})
     fields = resource.get("fields", {})
     title = fields.get("System.Title", "Sin título")
-    user = fields.get("System.ChangedBy", "Desconocido");
+    user = fields.get("System.ChangedBy", "Desconocido")
     work_id = resource.get("id", "—")
 
-    # Discord message format
     discord_payload = {
         "content": f"🔔 **Trabajo eliminado en Azure Boards**\n"
                    f"**ID:** {work_id}\n"
@@ -119,59 +93,44 @@ async def delete(request: Request):
                    f"**Usuario:** {user}\n"
     }
 
-    print("Sending to Discord:", discord_payload)
+    async with httpx.AsyncClient() as client:
+        response = await client.post(DISCORD_WEBHOOK, json=discord_payload, timeout=10)
+        print("Discord response:", response.status_code)
+    return {"status": "ok"}
 
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(DISCORD_WEBHOOK, json=discord_payload, timeout=10)
-            print("Discord response:", response.status_code, response.text)
-
-            if response.status_code not in (200, 204):
-                return {"status": "error", "discord": response.text}
-
-    except Exception as e:
-        print("Discord error:", e)
-        return {"status": "error", "details": str(e)}
-
-    return {"status": "ok", "sent": True}
-
+# ---------------- GitHub ---------------- #
 
 @app.post("/github")
 async def github_webhook(request: Request):
     event = request.headers.get("X-GitHub-Event")
     print(f"🔔 Evento recibido de GitHub: {event}")
 
-    # Si es un "ping", solo confirmamos
     if event == "ping":
         print("✅ GitHub webhook verificado correctamente (ping recibido)")
         return {"status": "pong"}
 
     try:
-        # Intentamos leer como JSON primero
         try:
             body = await request.json()
         except Exception:
-            # Si falla, probamos con x-www-form-urlencoded
-            form_data = await request.body()
-            form_str = form_data.decode("utf-8")
-            if form_str.startswith("payload="):
-                json_str = form_str.replace("payload=", "")
-                json_str = httpx.URL(json_str).decode()  # Decodifica los %22, %2C, etc.
+            raw_data = await request.body()
+            raw_str = raw_data.decode("utf-8")
+
+            if raw_str.startswith("payload="):
+                json_str = unquote(raw_str.replace("payload=", ""))
                 body = json.loads(json_str)
             else:
-                raise ValueError("Formato desconocido en el cuerpo")
+                raise ValueError("Formato desconocido en el body")
     except Exception as e:
         print("❌ Error leyendo el body:", e)
         raw = await request.body()
-        print("📦 Cuerpo recibido (raw):", raw[:500])  # Solo mostramos parte por seguridad
+        print("📦 Cuerpo recibido (raw):", raw[:500])
         return {"status": "error", "details": str(e)}
 
-    # Si no hay commits, ignoramos
     if "commits" not in body:
         return {"status": "ignored", "reason": "no commits"}
 
     repo_name = body.get("repository", {}).get("full_name", "Repositorio desconocido")
-    pusher = body.get("pusher", {}).get("name", "Desconocido")
 
     async with httpx.AsyncClient() as client:
         for commit in body["commits"]:
@@ -179,29 +138,26 @@ async def github_webhook(request: Request):
             url = commit.get("url", "")
             author = commit.get("author", {}).get("name", "Desconocido")
 
-            # Detectar referencias a work items
             match_doing = re.search(r"[Ww]orking on AB#(\d+)", message)
             match_done = re.search(r"[Ff]ixes AB#(\d+)", message)
 
             if match_doing:
                 await update_azure_state(match_doing.group(1), "Doing")
-
             if match_done:
                 await update_azure_state(match_done.group(1), "Done")
 
             discord_message = {
-                "content": f"🧩 **Nuevo commit en GitHub**\n"
-                           f"📁 **Repositorio:** {repo_name}\n"
-                           f"👤 **Autor:** {author}\n"
-                           f"💬 **Mensaje:** {message}\n"
-                           f"🔗 [Ver commit]({url})"
+                "content": (
+                    f"🧩 **Nuevo commit en GitHub**\n"
+                    f"📁 **Repositorio:** {repo_name}\n"
+                    f"👤 **Autor:** {author}\n"
+                    f"💬 **Mensaje:** {message}\n"
+                    f"🔗 [Ver commit]({url})"
+                )
             }
 
-            try:
-                discord_response = await client.post(DISCORD_WEBHOOK2, json=discord_message, timeout=10)
-                print("✅ Enviado a Discord:", discord_response.status_code)
-            except Exception as e:
-                print("❌ Error enviando a Discord:", e)
+            discord_response = await client.post(DISCORD_WEBHOOK2, json=discord_message, timeout=10)
+            print("✅ Enviado a Discord:", discord_response.status_code)
 
     return {"status": "ok"}
 
@@ -209,7 +165,7 @@ async def github_webhook(request: Request):
 async def update_azure_state(work_item_id, new_state):
     url = f"https://dev.azure.com/{AZURE_ORG}/{AZURE_PROJECT}/_apis/wit/workitems/{work_item_id}?api-version=7.0"
     headers = {"Content-Type": "application/json-patch+json"}
-    data = [{"op": "add", "path": "/fields/System.State", "value": new_state}]
+    data = [{"op": "replace", "path": "/fields/System.State", "value": new_state}]
 
     async with httpx.AsyncClient() as client:
         response = await client.patch(url, headers=headers, json=data, auth=("", AZURE_PAT))
