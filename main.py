@@ -42,7 +42,16 @@ async def update(request: Request):
     title = fields.get("System.Title", "Sin título")
     work_id = resource.get("revision", {}).get("id", "-")
     user = fields.get("System.ChangedBy", "Desconocido")
-    assigned_to = fields.get("System.AssignedTo", {}).get("uniqueName", None)
+    assigned_field = fields.get("System.AssignedTo")
+    if isinstance(assigned_field, dict):
+        assigned_to = assigned_field.get("uniqueName")
+    elif isinstance(assigned_field, str):
+    # Extrae el correo si existe entre < >
+        import re
+        match = re.search(r"<(.+?)>", assigned_field)
+        assigned_to = match.group(1) if match else assigned_field
+    else:
+        assigned_to = None
 
     # ========== 🔔 Discord notification ==========
     discord_payload = {
@@ -99,7 +108,16 @@ async def create(request: Request):
     resource = body.get("resource", {})
     fields = resource.get("fields", {})
     title = fields.get("System.Title", "Sin título")
-    assigned_to = fields.get("System.AssignedTo", {}).get("uniqueName", None)
+    assigned_field = fields.get("System.AssignedTo")
+    if isinstance(assigned_field, dict):
+        assigned_to = assigned_field.get("uniqueName")
+    elif isinstance(assigned_field, str):
+    # Extrae el correo si existe entre < >
+        import re
+        match = re.search(r"<(.+?)>", assigned_field)
+        assigned_to = match.group(1) if match else assigned_field
+    else:
+        assigned_to = None
     user = fields.get("System.ChangedBy", "Desconocido")
     work_id = resource.get("id", "—")
 
