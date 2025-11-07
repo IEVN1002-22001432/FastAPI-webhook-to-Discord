@@ -3,7 +3,7 @@ import re
 import json
 from fastapi import FastAPI, Request
 import httpx
-from urllib.parse import unquote
+from urllib.parse import unquote_plus
 
 app = FastAPI()
 
@@ -117,7 +117,7 @@ async def github_webhook(request: Request):
             raw_str = raw_data.decode("utf-8")
 
             if raw_str.startswith("payload="):
-                json_str = unquote(raw_str.replace("payload=", ""))
+                json_str = unquote_plus(raw_str.replace("payload=", ""))
                 body = json.loads(json_str)
             else:
                 raise ValueError("Formato desconocido en el body")
