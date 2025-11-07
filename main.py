@@ -20,6 +20,8 @@ USER_MAP = {
     "79028@alumnos.utleon.edu.mx": "usuarioGitHub",
 }
 
+print(f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/issues");
+
 # ---------------- Azure Boards ---------------- #
 
 @app.post("/update")
