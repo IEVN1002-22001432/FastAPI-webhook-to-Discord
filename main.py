@@ -139,22 +139,37 @@ async def delete(request: Request):
 @app.post("/github")
 async def github_webhook(request: Request):
     event = request.headers.get("X-GitHub-Event")
+    print(f"📨 Evento recibido de GitHub: {event}")
 
-    # ✅ Si el evento es "ping", solo confirmamos
+    # ✅ Si el evento es "ping", simplemente respondemos OK
     if event == "ping":
         print("✅ GitHub webhook verificado correctamente (ping recibido)")
         return {"status": "pong"}
 
-    # Intentamos leer el cuerpo del webhook
+    # ✅ Intentamos leer el cuerpo, incluso si no es JSON puro
     try:
-        body = await request.json()
+        raw_body = await request.body()
+        body_str = raw_body.decode("utf-8").strip()
+
+        if not body_str:
+            print("⚠️ Cuerpo vacío recibido del webhook")
+            return {"status": "error", "details": "empty body"}
+
+        # GitHub a veces envía application/x-www-form-urlencoded
+        if body_str.startswith("payload="):
+            body_str = body_str.replace("payload=", "", 1)
+            body_str = httpx.URL(body_str).decode() if "%7B" in body_str else body_str  # decodifica %7B%7D
+
+        body = json.loads(body_str)
+        print("✅ Body leído correctamente")
     except Exception as e:
         print("❌ Error leyendo el body:", e)
-        return {"status": "error", "details": "invalid JSON"}
+        print("📦 Cuerpo recibido (raw):", raw_body)
+        return {"status": "error", "details": str(e)}
 
-    print(f"🔔 Evento recibido de GitHub: {event}")
-
+    # ✅ Verificamos que tenga commits
     if "commits" not in body:
+        print("⚠️ No se encontraron commits en el webhook")
         return {"status": "ignored", "reason": "no commits"}
 
     repo_name = body.get("repository", {}).get("full_name", "Repositorio desconocido")
@@ -166,16 +181,24 @@ async def github_webhook(request: Request):
             url = commit.get("url", "")
             author = commit.get("author", {}).get("name", "Desconocido")
 
-            # Detectar referencias a work items
+            print(f"🔹 Procesando commit de {author}: {message}")
+
+            # 🔍 Detectar referencias a work items
             match_doing = re.search(r"[Ww]orking on AB#(\d+)", message)
             match_done = re.search(r"[Ff]ixes AB#(\d+)", message)
 
+            # 🔹 Actualizar en Azure si aplica
             if match_doing:
-                await update_azure_state(match_doing.group(1), "Doing")
+                work_id = match_doing.group(1)
+                print(f"🔧 Work item {work_id} → Doing")
+                await update_azure_state(work_id, "Doing")
 
             if match_done:
-                await update_azure_state(match_done.group(1), "Done")
+                work_id = match_done.group(1)
+                print(f"✅ Work item {work_id} → Done")
+                await update_azure_state(work_id, "Done")
 
+            # 🔹 Enviar mensaje a Discord
             discord_message = {
                 "content": f"🧩 **Nuevo commit en GitHub**\n"
                            f"📁 **Repositorio:** {repo_name}\n"
@@ -186,9 +209,9 @@ async def github_webhook(request: Request):
 
             try:
                 discord_response = await client.post(DISCORD_WEBHOOK2, json=discord_message, timeout=10)
-                print("Discord response:", discord_response.status_code)
+                print(f"📨 Enviado a Discord → {discord_response.status_code}")
             except Exception as e:
-                print("Error enviando a Discord:", e)
+                print("❌ Error enviando a Discord:", e)
 
     return {"status": "ok"}
 
