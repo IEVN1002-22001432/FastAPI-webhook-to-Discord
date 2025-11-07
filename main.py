@@ -19,10 +19,10 @@ GITHUB_OWNER=os.getenv("GITHUB_OWNER")
 GITHUB_REPO=os.getenv("GITHUB_REPO")
 
 USER_MAP = {
-    "Angel Yael Vargas Sanchez 80981@alumnos.utleon.edu.mx": "IEVN1002-22001432",
-    "Angel Emilio Ney Villegas 81268@alumnos.utleon.edu.mx": "IEVN1002-22001770",
-    "Deborah Jazmin Pliego Gonzalez82255@alumnos.utleon.edu.mx": "deborahjpliegog",
-    "Jorge Uriel Montes Ulloa 79028@alumnos.utleon.edu.mx": "IEVN1002-22001383",
+    "Angel Yael Vargas Sanchez <80981@alumnos.utleon.edu.mx>": "IEVN1002-22001432",
+    "Angel Emilio Ney Villegas <81268@alumnos.utleon.edu.mx>": "IEVN1002-22001770",
+    "Deborah Jazmin Pliego Gonzalez <82255@alumnos.utleon.edu.mx>": "deborahjpliegog",
+    "Jorge Uriel Montes Ulloa <79028@alumnos.utleon.edu.mx>": "IEVN1002-22001383",
 }
 
 # ---------------- Azure Boards ---------------- #
@@ -37,22 +37,34 @@ async def update(request: Request):
         return {"status": "error", "details": "invalid json"}
 
     resource = body.get("resource", {})
-    fields = resource.get("revision", {}).get("fields", {})
+    revision = resource.get("revision", {})
+    fields = revision.get("fields", {})
+    work_id = revision.get("id", "-")
     title = fields.get("System.Title", "Sin título")
-    work_id = resource.get("revision", {}).get("id", "-")
-    user = fields.get("System.ChangedBy", "Desconocido")
+
+    # --- ChangedBy puede ser dict o string ---
+    changed_field = fields.get("System.ChangedBy")
+    if isinstance(changed_field, dict):
+        user = changed_field.get("displayName", "Desconocido")
+    elif isinstance(changed_field, str):
+        user = changed_field
+    else:
+        user = "Desconocido"
+
+    # --- AssignedTo puede ser dict o string ---
     assigned_field = fields.get("System.AssignedTo")
     if isinstance(assigned_field, dict):
         assigned_to = assigned_field.get("uniqueName")
     elif isinstance(assigned_field, str):
-    # Extrae el correo si existe entre < >
         import re
         match = re.search(r"<(.+?)>", assigned_field)
         assigned_to = match.group(1) if match else assigned_field
     else:
         assigned_to = None
 
-    # ========== 🔔 Discord notification ==========
+    print(f"🧱 Procesado update → id={work_id}, title={title}, assigned_to={assigned_to}, user={user}")
+
+    # --- Discord notification ---
     discord_payload = {
         "content": f"🔄 **Actualización en Azure Boards**\n"
                    f"🆔 **ID:** {work_id}\n"
@@ -61,33 +73,36 @@ async def update(request: Request):
     }
 
     async with httpx.AsyncClient() as client:
-        await client.post(DISCORD_WEBHOOK, json=discord_payload, timeout=10)
+        r = await client.post(DISCORD_WEBHOOK, json=discord_payload, timeout=10)
+        print(f"📤 Discord webhook status: {r.status_code}")
 
-    # ========== 🧩 Buscar y actualizar issue en GitHub ==========
+    # --- GitHub issue update ---
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    async with httpx.AsyncClient() as client:
-        # Buscar issue por título (AB#id)
-        search = await client.get(
-            f"https://api.github.com/search/issues?q=repo:{GITHUB_OWNER}/{GITHUB_REPO}+in:title+AB#{work_id}",
-            headers=headers,
-        )
-        results = search.json().get("items", [])
-        if results:
-            issue_number = results[0]["number"]
-            update_data = {}
 
-            if assigned_to:
-                gh_user = USER_MAP.get(assigned_to)
-                if gh_user:
-                    update_data["assignees"] = [gh_user]
+    try:
+        async with httpx.AsyncClient() as client:
+            search_url = f"https://api.github.com/search/issues?q=repo:{GITHUB_OWNER}/{GITHUB_REPO}+in:title+AB#{work_id}"
+            search = await client.get(search_url, headers=headers)
+            print(f"🔎 GitHub search status: {search.status_code}")
+            print("🔎 GitHub search response:", search.text)
 
-            if update_data:
-                patch = await client.patch(
-                    f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/issues/{issue_number}",
-                    headers=headers,
-                    json=update_data,
-                )
-                print("🐙 GitHub issue update:", patch.status_code)
+            results = search.json().get("items", [])
+            if results:
+                issue_number = results[0]["number"]
+                update_data = {}
+
+                if assigned_to:
+                    gh_user = USER_MAP.get(assigned_to)
+                    if gh_user:
+                        update_data["assignees"] = [gh_user]
+
+                if update_data:
+                    patch_url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/issues/{issue_number}"
+                    patch = await client.patch(patch_url, headers=headers, json=update_data)
+                    print(f"🐙 GitHub issue update → {patch.status_code}")
+                    print("🔧 Response:", patch.text)
+    except Exception as e:
+        print(f"💥 Error actualizando GitHub: {e}")
 
     return {"status": "ok"}
 
