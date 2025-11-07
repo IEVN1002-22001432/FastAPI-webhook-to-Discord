@@ -83,7 +83,7 @@ async def update(request: Request):
 
     return {"status": "ok"}
 
-
+@app.post("/create")
 async def create(request: Request):
     try:
         body = await request.json()
