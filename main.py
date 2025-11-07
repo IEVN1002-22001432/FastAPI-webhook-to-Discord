@@ -31,7 +31,6 @@ USER_MAP = {
 async def update(request: Request):
     try:
         body = await request.json()
-        print("📩 Received Azure UPDATE webhook:", body)
     except Exception as e:
         print("❌ JSON parse error:", e)
         return {"status": "error", "details": "invalid json"}
@@ -42,7 +41,7 @@ async def update(request: Request):
     work_id = revision.get("id", "-")
     title = fields.get("System.Title", "Sin título")
 
-    # --- ChangedBy puede ser dict o string ---
+    # --- ChangedBy ---
     changed_field = fields.get("System.ChangedBy")
     if isinstance(changed_field, dict):
         user = changed_field.get("displayName", "Desconocido")
@@ -51,7 +50,7 @@ async def update(request: Request):
     else:
         user = "Desconocido"
 
-    # --- AssignedTo puede ser dict o string ---
+    # --- AssignedTo ---
     assigned_field = fields.get("System.AssignedTo")
     if isinstance(assigned_field, dict):
         assigned_to = assigned_field.get("uniqueName")
@@ -62,7 +61,7 @@ async def update(request: Request):
     else:
         assigned_to = None
 
-    print(f"🧱 Procesado update → id={work_id}, title={title}, assigned_to={assigned_to}, user={user}")
+    print(f"🧱 UPDATE recibido → id={work_id}, title='{title}', assigned_to={assigned_to}, user={user}")
 
     # --- Discord notification ---
     discord_payload = {
@@ -74,35 +73,70 @@ async def update(request: Request):
 
     async with httpx.AsyncClient() as client:
         r = await client.post(DISCORD_WEBHOOK, json=discord_payload, timeout=10)
-        print(f"📤 Discord webhook status: {r.status_code}")
+        print(f"📤 Discord webhook → {r.status_code}")
 
     # --- GitHub issue update ---
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    print("🚀 Entrando a bloque de actualización GitHub")
+
+    # ✅ Validar configuración
+    print("🔧 GITHUB_OWNER:", GITHUB_OWNER)
+    print("🔧 GITHUB_REPO:", GITHUB_REPO)
+    print("🔧 TOKEN presente:", "✅" if GITHUB_TOKEN else "❌ vacío")
+
+    if not all([GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO]):
+        print("⚠️ Configuración GitHub incompleta. Abortando actualización.")
+        return {"status": "error", "details": "GitHub config missing"}
+
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json"
+    }
 
     try:
         async with httpx.AsyncClient() as client:
-            search_url = f"https://api.github.com/search/issues?q=repo:{GITHUB_OWNER}/{GITHUB_REPO}+in:title+AB#{work_id}"
+            search_url = (
+                f"https://api.github.com/search/issues"
+                f"?q=repo:{GITHUB_OWNER}/{GITHUB_REPO}+in:title+AB#{work_id}"
+            )
+            print(f"🔍 Buscando issue en GitHub → {search_url}")
             search = await client.get(search_url, headers=headers)
+
             print(f"🔎 GitHub search status: {search.status_code}")
-            print("🔎 GitHub search response:", search.text)
+            if search.status_code >= 400:
+                print("❌ GitHub search error:", search.text)
+                return {"status": "error", "details": f"GitHub search failed ({search.status_code})"}
 
-            results = search.json().get("items", [])
-            if results:
-                issue_number = results[0]["number"]
-                update_data = {}
+            data = search.json()
+            print(f"📦 Search JSON keys: {list(data.keys())}")
+            total = data.get("total_count", 0)
+            print(f"🔢 Issues encontrados: {total}")
 
-                if assigned_to:
-                    gh_user = USER_MAP.get(assigned_to)
-                    if gh_user:
-                        update_data["assignees"] = [gh_user]
+            if total == 0:
+                print("⚠️ No se encontró ningún issue con ese AB#ID.")
+                return {"status": "ok", "details": "no matching issue"}
 
-                if update_data:
+            issue_number = data["items"][0]["number"]
+            issue_title = data["items"][0]["title"]
+            print(f"🪣 Issue encontrado #{issue_number}: '{issue_title}'")
+
+            # --- Si hay assigned_to ---
+            if assigned_to:
+                gh_user = USER_MAP.get(assigned_to)
+                print(f"👤 Mapeo de usuario: {assigned_to} → {gh_user}")
+                if gh_user:
+                    update_data = {"assignees": [gh_user]}
                     patch_url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/issues/{issue_number}"
+                    print(f"🛠️ Actualizando issue #{issue_number} con {update_data}")
                     patch = await client.patch(patch_url, headers=headers, json=update_data)
                     print(f"🐙 GitHub issue update → {patch.status_code}")
-                    print("🔧 Response:", patch.text)
+                    print("🔧 Response text:", patch.text[:300])
+                else:
+                    print(f"⚠️ No hay mapeo en USER_MAP para {assigned_to}")
+            else:
+                print("⚠️ No hay ningún usuario asignado en Azure (assigned_to es None)")
+
     except Exception as e:
-        print(f"💥 Error actualizando GitHub: {e}")
+        print(f"💥 Error actualizando GitHub: {type(e).__name__} - {e}")
 
     return {"status": "ok"}
 
