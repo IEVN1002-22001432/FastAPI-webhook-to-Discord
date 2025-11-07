@@ -9,6 +9,7 @@ app = FastAPI()
 
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 DISCORD_WEBHOOK2 = os.getenv("DISCORD_WEBHOOK2")
+
 AZURE_ORG = os.getenv("AZURE_ORG")
 AZURE_PROJECT = os.getenv("AZURE_PROJECT")
 AZURE_PAT = os.getenv("AZURE_PAT")
@@ -18,13 +19,11 @@ GITHUB_OWNER=os.getenv("GITHUB_OWNER")
 GITHUB_REPO=os.getenv("GITHUB_REPO")
 
 USER_MAP = {
-    "80981@alumnos.utleon.edu.mx": "IEVN1002-22001432",
-    "81268@alumnos.utleon.edu.mx": "IEVN1002-22001770",
-    "82255@alumnos.utleon.edu.mx": "usuarioGitHub",
-    "79028@alumnos.utleon.edu.mx": "usuarioGitHub",
+    "Angel Yael Vargas Sanchez 80981@alumnos.utleon.edu.mx": "IEVN1002-22001432",
+    "Angel Emilio Ney Villegas 81268@alumnos.utleon.edu.mx": "IEVN1002-22001770",
+    "Deborah Jazmin Pliego Gonzalez82255@alumnos.utleon.edu.mx": "deborahjpliegog",
+    "Jorge Uriel Montes Ulloa 79028@alumnos.utleon.edu.mx": "IEVN1002-22001383",
 }
-
-print(f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/issues")
 
 # ---------------- Azure Boards ---------------- #
 
