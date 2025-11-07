@@ -139,37 +139,35 @@ async def delete(request: Request):
 @app.post("/github")
 async def github_webhook(request: Request):
     event = request.headers.get("X-GitHub-Event")
-    print(f"📨 Evento recibido de GitHub: {event}")
+    print(f"🔔 Evento recibido de GitHub: {event}")
 
-    # ✅ Si el evento es "ping", simplemente respondemos OK
+    # Si es un "ping", solo confirmamos
     if event == "ping":
         print("✅ GitHub webhook verificado correctamente (ping recibido)")
         return {"status": "pong"}
 
-    # ✅ Intentamos leer el cuerpo, incluso si no es JSON puro
     try:
-        raw_body = await request.body()
-        body_str = raw_body.decode("utf-8").strip()
-
-        if not body_str:
-            print("⚠️ Cuerpo vacío recibido del webhook")
-            return {"status": "error", "details": "empty body"}
-
-        # GitHub a veces envía application/x-www-form-urlencoded
-        if body_str.startswith("payload="):
-            body_str = body_str.replace("payload=", "", 1)
-            body_str = httpx.URL(body_str).decode() if "%7B" in body_str else body_str  # decodifica %7B%7D
-
-        body = json.loads(body_str)
-        print("✅ Body leído correctamente")
+        # Intentamos leer como JSON primero
+        try:
+            body = await request.json()
+        except Exception:
+            # Si falla, probamos con x-www-form-urlencoded
+            form_data = await request.body()
+            form_str = form_data.decode("utf-8")
+            if form_str.startswith("payload="):
+                json_str = form_str.replace("payload=", "")
+                json_str = httpx.URL(json_str).decode()  # Decodifica los %22, %2C, etc.
+                body = json.loads(json_str)
+            else:
+                raise ValueError("Formato desconocido en el cuerpo")
     except Exception as e:
         print("❌ Error leyendo el body:", e)
-        print("📦 Cuerpo recibido (raw):", raw_body)
+        raw = await request.body()
+        print("📦 Cuerpo recibido (raw):", raw[:500])  # Solo mostramos parte por seguridad
         return {"status": "error", "details": str(e)}
 
-    # ✅ Verificamos que tenga commits
+    # Si no hay commits, ignoramos
     if "commits" not in body:
-        print("⚠️ No se encontraron commits en el webhook")
         return {"status": "ignored", "reason": "no commits"}
 
     repo_name = body.get("repository", {}).get("full_name", "Repositorio desconocido")
@@ -181,24 +179,16 @@ async def github_webhook(request: Request):
             url = commit.get("url", "")
             author = commit.get("author", {}).get("name", "Desconocido")
 
-            print(f"🔹 Procesando commit de {author}: {message}")
-
-            # 🔍 Detectar referencias a work items
+            # Detectar referencias a work items
             match_doing = re.search(r"[Ww]orking on AB#(\d+)", message)
             match_done = re.search(r"[Ff]ixes AB#(\d+)", message)
 
-            # 🔹 Actualizar en Azure si aplica
             if match_doing:
-                work_id = match_doing.group(1)
-                print(f"🔧 Work item {work_id} → Doing")
-                await update_azure_state(work_id, "Doing")
+                await update_azure_state(match_doing.group(1), "Doing")
 
             if match_done:
-                work_id = match_done.group(1)
-                print(f"✅ Work item {work_id} → Done")
-                await update_azure_state(work_id, "Done")
+                await update_azure_state(match_done.group(1), "Done")
 
-            # 🔹 Enviar mensaje a Discord
             discord_message = {
                 "content": f"🧩 **Nuevo commit en GitHub**\n"
                            f"📁 **Repositorio:** {repo_name}\n"
@@ -209,7 +199,7 @@ async def github_webhook(request: Request):
 
             try:
                 discord_response = await client.post(DISCORD_WEBHOOK2, json=discord_message, timeout=10)
-                print(f"📨 Enviado a Discord → {discord_response.status_code}")
+                print("✅ Enviado a Discord:", discord_response.status_code)
             except Exception as e:
                 print("❌ Error enviando a Discord:", e)
 
