@@ -13,61 +13,120 @@ AZURE_ORG = os.getenv("AZURE_ORG")
 AZURE_PROJECT = os.getenv("AZURE_PROJECT")
 AZURE_PAT = os.getenv("AZURE_PAT")
 
+USER_MAP = {
+    "80981@alumnos.utleon.edu.mx": "IEVN1002-22001432",
+    "81268@alumnos.utleon.edu.mx": "IEVN1002-22001770",
+    "82255@alumnos.utleon.edu.mx": "usuarioGitHub",
+    "79028@alumnos.utleon.edu.mx": "usuarioGitHub",
+}
+
 # ---------------- Azure Boards ---------------- #
 
 @app.post("/update")
 async def update(request: Request):
     try:
         body = await request.json()
-        print("Received body:", body)
+        print("📩 Received Azure UPDATE webhook:", body)
     except Exception as e:
-        print("JSON parse error:", e)
+        print("❌ JSON parse error:", e)
         return {"status": "error", "details": "invalid json"}
 
     resource = body.get("resource", {})
     fields = resource.get("revision", {}).get("fields", {})
     title = fields.get("System.Title", "Sin título")
-    user = fields.get("System.ChangedBy", "Desconocido")
     work_id = resource.get("revision", {}).get("id", "-")
+    user = fields.get("System.ChangedBy", "Desconocido")
+    assigned_to = fields.get("System.AssignedTo", {}).get("uniqueName", None)
 
+    # ========== 🔔 Discord notification ==========
     discord_payload = {
-        "content": f"🔔 **Actualización en Azure Boards**\n"
-                   f"**ID:** {work_id}\n"
-                   f"**Título:** {title}\n"
-                   f"**Usuario:** {user}\n"
+        "content": f"🔄 **Actualización en Azure Boards**\n"
+                   f"🆔 **ID:** {work_id}\n"
+                   f"📄 **Título:** {title}\n"
+                   f"👤 **Usuario:** {user}"
     }
 
     async with httpx.AsyncClient() as client:
-        response = await client.post(DISCORD_WEBHOOK, json=discord_payload, timeout=10)
-        print("Discord response:", response.status_code)
+        await client.post(DISCORD_WEBHOOK, json=discord_payload, timeout=10)
+
+    # ========== 🧩 Buscar y actualizar issue en GitHub ==========
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    async with httpx.AsyncClient() as client:
+        # Buscar issue por título (AB#id)
+        search = await client.get(
+            f"https://api.github.com/search/issues?q=repo:{GITHUB_OWNER}/{GITHUB_REPO}+in:title+AB#{work_id}",
+            headers=headers,
+        )
+        results = search.json().get("items", [])
+        if results:
+            issue_number = results[0]["number"]
+            update_data = {}
+
+            if assigned_to:
+                gh_user = USER_MAP.get(assigned_to)
+                if gh_user:
+                    update_data["assignees"] = [gh_user]
+
+            if update_data:
+                patch = await client.patch(
+                    f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/issues/{issue_number}",
+                    headers=headers,
+                    json=update_data,
+                )
+                print("🐙 GitHub issue update:", patch.status_code)
+
     return {"status": "ok"}
 
 
-@app.post("/create")
 async def create(request: Request):
     try:
         body = await request.json()
-        print("Received body:", body)
+        print("📩 Received Azure CREATE webhook:", body)
     except Exception as e:
-        print("JSON parse error:", e)
+        print("❌ JSON parse error:", e)
         return {"status": "error", "details": "invalid json"}
 
     resource = body.get("resource", {})
     fields = resource.get("fields", {})
     title = fields.get("System.Title", "Sin título")
+    assigned_to = fields.get("System.AssignedTo", {}).get("uniqueName", None)
     user = fields.get("System.ChangedBy", "Desconocido")
     work_id = resource.get("id", "—")
 
+    # ========== 🔔 Discord notification ==========
     discord_payload = {
         "content": f"🔔 **Nuevo trabajo en Azure Boards**\n"
-                   f"**ID:** {work_id}\n"
-                   f"**Título:** {title}\n"
-                   f"**Usuario:** {user}\n"
+                   f"🆔 **ID:** {work_id}\n"
+                   f"📄 **Título:** {title}\n"
+                   f"👤 **Usuario:** {user}"
     }
 
     async with httpx.AsyncClient() as client:
-        response = await client.post(DISCORD_WEBHOOK, json=discord_payload, timeout=10)
-        print("Discord response:", response.status_code)
+        await client.post(DISCORD_WEBHOOK, json=discord_payload, timeout=10)
+
+    # ========== 🧩 Crear issue en GitHub ==========
+    github_issue = {
+        "title": f"[AB#{work_id}] {title}",
+        "body": f"Creado automáticamente desde Azure Boards por **{user}**.\n\n"
+                f"🔗 [Ver en Azure Boards](https://dev.azure.com/{os.getenv('AZURE_ORG')}/{os.getenv('AZURE_PROJECT')}/_workitems/edit/{work_id})"
+    }
+
+    # Si hay asignado, mapea al username de GitHub
+    if assigned_to:
+        gh_user = USER_MAP.get(assigned_to)
+        if gh_user:
+            github_issue["assignees"] = [gh_user]
+
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+
+    async with httpx.AsyncClient() as client:
+        gh_resp = await client.post(
+            f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/issues",
+            headers=headers,
+            json=github_issue,
+        )
+        print("🐙 GitHub issue create:", gh_resp.status_code, gh_resp.text[:200])
+
     return {"status": "ok"}
 
 
