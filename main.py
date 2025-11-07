@@ -19,10 +19,10 @@ GITHUB_OWNER=os.getenv("GITHUB_OWNER")
 GITHUB_REPO=os.getenv("GITHUB_REPO")
 
 USER_MAP = {
-    "Angel Yael Vargas Sanchez <80981@alumnos.utleon.edu.mx>": "IEVN1002-22001432",
-    "Angel Emilio Ney Villegas <81268@alumnos.utleon.edu.mx>": "IEVN1002-22001770",
-    "Deborah Jazmin Pliego Gonzalez <82255@alumnos.utleon.edu.mx>": "deborahjpliegog",
-    "Jorge Uriel Montes Ulloa <79028@alumnos.utleon.edu.mx>": "IEVN1002-22001383",
+    "80981@alumnos.utleon.edu.mx": "IEVN1002-22001432",
+    "81268@alumnos.utleon.edu.mx": "IEVN1002-22001770",
+    "82255@alumnos.utleon.edu.mx": "deborahjpliegog",
+    "79028@alumnos.utleon.edu.mx": "IEVN1002-22001383",
 }
 
 # ---------------- Azure Boards ---------------- #
