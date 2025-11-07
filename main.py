@@ -138,8 +138,21 @@ async def delete(request: Request):
 
 @app.post("/github")
 async def github_webhook(request: Request):
-    body = await request.json()
-    print("Received GitHub webhook:", body)
+    event = request.headers.get("X-GitHub-Event")
+
+    # ✅ Si el evento es "ping", solo confirmamos
+    if event == "ping":
+        print("✅ GitHub webhook verificado correctamente (ping recibido)")
+        return {"status": "pong"}
+
+    # Intentamos leer el cuerpo del webhook
+    try:
+        body = await request.json()
+    except Exception as e:
+        print("❌ Error leyendo el body:", e)
+        return {"status": "error", "details": "invalid JSON"}
+
+    print(f"🔔 Evento recibido de GitHub: {event}")
 
     if "commits" not in body:
         return {"status": "ignored", "reason": "no commits"}
@@ -153,20 +166,16 @@ async def github_webhook(request: Request):
             url = commit.get("url", "")
             author = commit.get("author", {}).get("name", "Desconocido")
 
-            # 🔹 Detectar referencias a work items
+            # Detectar referencias a work items
             match_doing = re.search(r"[Ww]orking on AB#(\d+)", message)
             match_done = re.search(r"[Ff]ixes AB#(\d+)", message)
 
-            # 🔹 Si hay coincidencia, actualizar estado en Azure
             if match_doing:
-                work_id = match_doing.group(1)
-                await update_azure_state(work_id, "Doing")
+                await update_azure_state(match_doing.group(1), "Doing")
 
             if match_done:
-                work_id = match_done.group(1)
-                await update_azure_state(work_id, "Done")
+                await update_azure_state(match_done.group(1), "Done")
 
-            # 🔹 Enviar mensaje a Discord
             discord_message = {
                 "content": f"🧩 **Nuevo commit en GitHub**\n"
                            f"📁 **Repositorio:** {repo_name}\n"
