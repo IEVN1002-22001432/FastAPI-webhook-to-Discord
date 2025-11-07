@@ -13,6 +13,10 @@ AZURE_ORG = os.getenv("AZURE_ORG")
 AZURE_PROJECT = os.getenv("AZURE_PROJECT")
 AZURE_PAT = os.getenv("AZURE_PAT")
 
+GITHUB_TOKEN=os.getenv("GITHUB_TOKEN")
+GITHUB_OWNER=os.getenv("GITHUB_OWNER")
+GITHUB_REPO=os.getenv("GITHUB_REPO")
+
 USER_MAP = {
     "80981@alumnos.utleon.edu.mx": "IEVN1002-22001432",
     "81268@alumnos.utleon.edu.mx": "IEVN1002-22001770",
