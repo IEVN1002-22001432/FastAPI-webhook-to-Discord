@@ -7,6 +7,7 @@ app = FastAPI()
 
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 print("DISCORD_WEBHOOK =", DISCORD_WEBHOOK)
+DISCORD_WEBHOOK2 = os.getenv("DISCORD_WEBHOOK2")
 AZURE_ORG = os.getenv("AZURE_ORG")
 print("AZURE_ORG =", AZURE_ORG)
 AZURE_PROJECT = os.getenv("AZURE_PROJECT")
@@ -175,7 +176,7 @@ async def github_webhook(request: Request):
             }
 
             try:
-                discord_response = await client.post(DISCORD_WEBHOOK, json=discord_message, timeout=10)
+                discord_response = await client.post(DISCORD_WEBHOOK2, json=discord_message, timeout=10)
                 print("Discord response:", discord_response.status_code)
             except Exception as e:
                 print("Error enviando a Discord:", e)
