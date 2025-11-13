@@ -20,10 +20,9 @@ GITHUB_REPO=os.getenv("GITHUB_REPO")
 
 USER_MAP = {
     "80981@alumnos.utleon.edu.mx": "IEVN1002-22001432",
-    "21000020@alumnos.utleon.edu.mx": "IEVN1002-21000020",
-    "21002110@alumnos.utleon.edu.mx": "IEVN1002-21002110",
+    "81268@alumnos.utleon.edu.mx": "IEVN1002-22001770",
+    "82255@alumnos.utleon.edu.mx": "deborahjpliegog",
     "79028@alumnos.utleon.edu.mx": "IEVN1002-22001383",
-    "21000456@alumnos.utleon.edu.mx": "IEVN1002-22000456"
 }
 
 # ---------------- Azure Boards ---------------- #
@@ -66,10 +65,10 @@ async def update(request: Request):
 
     # --- Discord notification ---
     discord_payload = {
-        "content": f"**Actualización en Azure**\n"
-                   f"**ID:** {work_id}\n"
-                   f"**Trabajo:** {title}\n"
-                   f"**Miembro:** {user}"
+        "content": f"🔄 **Actualización en Azure Boards**\n"
+                   f"🆔 **ID:** {work_id}\n"
+                   f"📄 **Título:** {title}\n"
+                   f"👤 **Usuario:** {user}"
     }
 
     async with httpx.AsyncClient() as client:
@@ -132,9 +131,9 @@ async def update(request: Request):
                     print(f"🐙 GitHub issue update → {patch.status_code}")
                     print("🔧 Response text:", patch.text[:300])
                 else:
-                    print(f"No hay mapeo en USER_MAP para {assigned_to}")
+                    print(f"⚠️ No hay mapeo en USER_MAP para {assigned_to}")
             else:
-                print("No hay ningún usuario asignado en Azure (assigned_to es None)")
+                print("⚠️ No hay ningún usuario asignado en Azure (assigned_to es None)")
 
     except Exception as e:
         print(f"💥 Error actualizando GitHub: {type(e).__name__} - {e}")
@@ -174,10 +173,10 @@ async def create(request: Request):
 
     # ========== 🔔 Discord notification ==========
     discord_payload = {
-        "content": f"**Nuevo trabajo en Azure**\n"
-                   f"**ID:** {work_id}\n"
-                   f"**Trabajo:** {title}\n"
-                   f"**Miembro:** {user}"
+        "content": f"🔔 **Nuevo trabajo en Azure Boards**\n"
+                   f"🆔 **ID:** {work_id}\n"
+                   f"📄 **Título:** {title}\n"
+                   f"👤 **Usuario:** {user}"
     }
 
     try:
@@ -231,10 +230,10 @@ async def delete(request: Request):
     work_id = resource.get("id", "—")
 
     discord_payload = {
-        "content": f"**Trabajo eliminado en Azure**\n"
+        "content": f"🔔 **Trabajo eliminado en Azure Boards**\n"
                    f"**ID:** {work_id}\n"
-                   f"**Trabajo:** {title}\n"
-                   f"**Miembro:** {user}\n"
+                   f"**Título:** {title}\n"
+                   f"**Usuario:** {user}\n"
     }
 
     async with httpx.AsyncClient() as client:
@@ -292,11 +291,11 @@ async def github_webhook(request: Request):
 
             discord_message = {
                 "content": (
-                    f"**Nuevo commit**\n"
-                    f"**Repositorio:** {repo_name}\n"
-                    f"**Miembro:** {author}\n"
-                    f"**Mensaje:** {message}\n"
-                    f"[Link directo]({url})"
+                    f"🧩 **Nuevo commit en GitHub**\n"
+                    f"📁 **Repositorio:** {repo_name}\n"
+                    f"👤 **Autor:** {author}\n"
+                    f"💬 **Mensaje:** {message}\n"
+                    f"🔗 [Ver commit]({url})"
                 )
             }
 
